@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:batch="http://www.springframework.org/schema/batch" 
+    xmlns:util="http://www.springframework.org/schema/util"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.springframework.org/schema/batch 
+        http://www.springframework.org/schema/batch/spring-batch-2.1.xsd
+        http://www.springframework.org/schema/beans 
+        http://www.springframework.org/schema/beans/spring-beans-3.2.xsd
+        http://www.springframework.org/schema/util 
+        http://www.springframework.org/schema/util/spring-util-3.2.xsd">
+
+    <import resource="classpath:spring/batch/config/context.xml" />
+    <import resource="classpath:spring/batch/config/database.xml" />
+
+    <bean id="itemReader" class="org.springframework.batch.item.database.JdbcCursorItemReader" scope="step">
+        <property name="dataSource" ref="inDataSource" />
+        <property name="sql">
+            <value>
+                <![CDATA[
+                SELECT seq
+                      ,id
+                      ,email
+                      ,hire_date
+                  FROM in_user
+                 WHERE hire_date >= '#{jobParameters[startDate]}' 
+                   AND hire_date <= '#{jobParameters[endDate]}'
+                   AND seq >= #{stepExecutionContext[minValue]} 
+                   AND seq <= #{stepExecutionContext[maxValue]}
+                 ORDER BY seq
+                ]]>
+            </value>
+        </property>
+        <property name="rowMapper">
+            <bean class="fcb.batch.mapper.UserRowMapper" />
+        </property>
+    </bean>
+
+    <bean id="itemWriter" class="org.springframework.batch.item.database.JdbcBatchItemWriter">
+        <property name="dataSource" ref="outDataSource" />
+        <property name="sql">
+            <value>
+                <![CDATA[
+                INSERT INTO out_user (
+                        seq
+                       ,id
+                       ,email
+                       ,hire_date)
+                    VALUES (
+                        :seq
+                       ,:id
+                       ,:email
+                       ,:hireDate)
+                ]]>
+            </value>
+        </property>
+        <!-- It will take care matching between object property and sql name parameter -->
+        <property name="itemSqlParameterSourceProvider">
+            <bean class="org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider" />
+        </property>
+    </bean>
+    
+    <bean id="rangePartitioner" class="fcb.batch.partition.RangePartitioner">
+        <property name="range" value="1000" />
+    </bean>
+
+    <bean id="taskExecutor" class="org.springframework.core.task.SimpleAsyncTaskExecutor" />
+
+    <step id="slave" xmlns="http://www.springframework.org/schema/batch">
+        <tasklet>
+            <chunk reader="itemReader" writer="itemWriter" commit-interval="1000" />
+        </tasklet>
+    </step>
+    
+    <!-- partitioner job -->
+    <job id="partitionJob" xmlns="http://www.springframework.org/schema/batch">
+        <!-- master step, 10 threads (grid-size)  -->
+        <step id="masterStep">
+            <partition step="slave" partitioner="rangePartitioner">
+                <handler grid-size="10" task-executor="taskExecutor" />
+            </partition>
+        </step>
+    </job>
+</beans>

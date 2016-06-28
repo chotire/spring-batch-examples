@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:batch="http://www.springframework.org/schema/batch" 
+    xmlns:util="http://www.springframework.org/schema/util"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.springframework.org/schema/batch 
+        http://www.springframework.org/schema/batch/spring-batch-2.1.xsd
+        http://www.springframework.org/schema/beans 
+        http://www.springframework.org/schema/beans/spring-beans-3.2.xsd
+        http://www.springframework.org/schema/util 
+        http://www.springframework.org/schema/util/spring-util-3.2.xsd">
+        
+    <import resource="classpath:spring/batch/config/context.xml" />
+    <import resource="classpath:spring/batch/config/database.xml" />
+
+    <bean id="itemReader" class="org.springframework.batch.item.database.StoredProcedureItemReader" scope="step">
+        <property name="dataSource" ref="inDataSource" />
+        <property name="procedureName" value="NEXT_PRIME" />
+        <property name="parameters">
+            <list>
+                <bean class="org.springframework.jdbc.core.SqlParameter">
+                    <constructor-arg index="0" value="value" />
+                    <constructor-arg index="1">
+                        <util:constant static-field="java.sql.Types.VARCHAR" />
+                    </constructor-arg>
+                </bean>
+            </list>
+        </property>
+        <property name="preparedStatementSetter" ref="preparedStatementSetter" />
+        <property name="rowMapper">
+            <bean class="fcb.batch.mapper.NextPrimeRowMapper" />
+        </property>
+    </bean>
+
+    <bean id="preparedStatementSetter" class="org.springframework.batch.core.resource.ListPreparedStatementSetter" scope="step">
+        <property name="parameters">
+            <list>
+                <value>3</value>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="itemWriter" class="org.springframework.batch.item.file.FlatFileItemWriter">
+        <!-- write to this csv file -->
+        <property name="resource" value="file:outputs/cvs/stored-procedure-result.csv" />
+        <property name="shouldDeleteIfExists" value="true" />
+        <property name="lineAggregator">
+            <bean class="org.springframework.batch.item.file.transform.DelimitedLineAggregator">
+                <property name="delimiter" value="," />
+                <property name="fieldExtractor">
+                    <bean class="org.springframework.batch.item.file.transform.PassThroughFieldExtractor" />
+                </property>
+            </bean>
+        </property>
+    </bean>
+
+    <job id="storedProcedureJob" xmlns="http://www.springframework.org/schema/batch">
+        <step id="step1">
+            <tasklet>
+                <chunk reader="itemReader" writer="itemWriter" commit-interval="2000" />
+            </tasklet>
+        </step>
+    </job>
+</beans>

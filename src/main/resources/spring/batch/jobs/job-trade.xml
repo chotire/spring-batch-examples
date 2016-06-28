@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:batch="http://www.springframework.org/schema/batch" 
+    xmlns:util="http://www.springframework.org/schema/util"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.springframework.org/schema/batch 
+        http://www.springframework.org/schema/batch/spring-batch-2.1.xsd
+        http://www.springframework.org/schema/beans 
+        http://www.springframework.org/schema/beans/spring-beans-3.2.xsd
+        http://www.springframework.org/schema/util 
+        http://www.springframework.org/schema/util/spring-util-3.2.xsd">
+        
+    <import resource="classpath:spring/batch/config/context.xml" />
+    <import resource="classpath:spring/batch/config/database.xml" />
+
+    <bean id="itemReader" class="org.springframework.batch.item.database.JdbcCursorItemReader" scope="step">
+        <property name="dataSource" ref="inDataSource" />
+        <property name="sql">
+            <value>
+                <![CDATA[
+                SELECT seq
+                      ,id
+                      ,email
+                      ,hire_date
+                  FROM in_user
+                 WHERE hire_date >= '#{jobParameters[startDate]}'
+                   AND hire_date <= '#{jobParameters[endDate]}'
+                ]]>
+            </value>
+        </property>
+        <property name="rowMapper">
+            <bean class="fcb.batch.mapper.UserRowMapper" />
+        </property>
+    </bean>
+
+    <bean id="itemWriter" class="org.springframework.batch.item.database.JdbcBatchItemWriter">
+        <property name="dataSource" ref="outDataSource" />
+        <property name="sql">
+            <value>
+                <![CDATA[
+                INSERT INTO out_user (
+                        seq
+                       ,id
+                       ,email
+                       ,hire_date)
+                    VALUES (
+                        :seq
+                       ,:id
+                       ,:email
+                       ,:hireDate)
+                ]]>
+            </value>
+        </property>
+        <property name="itemSqlParameterSourceProvider">
+            <bean class="org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider" />
+        </property>
+    </bean>
+
+    <bean id="flatFileItemWriter" class="org.springframework.batch.item.file.FlatFileItemWriter">
+        <!-- write to this csv file -->
+        <property name="resource" value="file:outputs/cvs/user.csv" />
+        <property name="shouldDeleteIfExists" value="true" />
+        <property name="lineAggregator">
+            <bean class="org.springframework.batch.item.file.transform.DelimitedLineAggregator">
+                <property name="delimiter" value="," />
+                <property name="fieldExtractor">
+                    <bean class="org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor">
+                        <property name="names" value="seq, id, email, hireDate" />
+                    </bean>
+                </property>
+            </bean>
+        </property>
+    </bean>
+
+    <bean id="userRollbackTasklet" class="fcb.batch.step.tasklet.JdbcStepContextParameterizedTasklet">
+        <property name="dataSource" ref="outDataSource" />
+        <property name="sql">
+            <value>
+                <![CDATA[
+                DELETE
+                  FROM out_user
+                 WHERE hire_date >= :startDate
+                   AND hire_date <= :endDate
+                ]]>
+            </value>
+        </property>
+    </bean>
+
+    <job id="tradeJob" xmlns="http://www.springframework.org/schema/batch">
+        <step id="step1">
+            <tasklet>
+                <chunk reader="itemReader" writer="itemWriter" commit-interval="2000" />
+            </tasklet>
+            <next on="*" to="step2" xmlns="http://www.springframework.org/schema/batch" />
+            <next on="FAILED" to="step3" xmlns="http://www.springframework.org/schema/batch" />
+        </step>
+        <step id="step2">
+            <tasklet>
+                <chunk reader="itemReader" writer="flatFileItemWriter" commit-interval="1000" />
+            </tasklet>
+        </step>
+        <step id="step3">
+            <tasklet ref="userRollbackTasklet" />
+        </step>
+    </job>
+    
+    <!--
+    Job을 한 번 성공한 후 테스트를 위해 한 개의 로우만 남기고 Job 에러시에 정상적으로
+    테이블이 삭제되는지 확인하기 위한 테스트
+    delete from OUT_USER where seq <> 10;
+    <job id="basicJob" xmlns="http://www.springframework.org/schema/batch">
+        <step id="step1">
+            <tasklet>
+                <chunk reader="itemReader" writer="itemWriter" commit-interval="2000" />
+            </tasklet>
+            <next on="*" to="step2" xmlns="http://www.springframework.org/schema/batch" />
+        </step>
+        <step id="step2">
+            <tasklet>
+                <chunk reader="itemReader" writer="flatFileItemWriter" commit-interval="1000" />
+            </tasklet>
+        </step>
+    </job>
+     -->
+</beans>

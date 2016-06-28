@@ -1,0 +1,51 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:jdbc="http://www.springframework.org/schema/jdbc" 
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans 
+        http://www.springframework.org/schema/beans/spring-beans-3.2.xsd
+        http://www.springframework.org/schema/jdbc 
+        http://www.springframework.org/schema/jdbc/spring-jdbc-3.2.xsd">
+
+    <!-- connect to h2 database -->
+    <bean id="inDataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+        <property name="driverClassName" value="${in.h2.jdbc.driver}" />
+        <property name="url" value="${in.h2.jdbc.url}" />
+        <property name="username" value="${in.h2.jdbc.username}" />
+        <property name="password" value="${in.h2.jdbc.password}" />
+    </bean>
+    
+    <bean id="outDataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+        <property name="driverClassName" value="${out.h2.jdbc.driver}" />
+        <property name="url" value="${out.h2.jdbc.url}" />
+        <property name="username" value="${out.h2.jdbc.username}" />
+        <property name="password" value="${out.h2.jdbc.password}" />
+    </bean>
+
+    <bean id="skipDataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+        <property name="driverClassName" value="${skip.h2.jdbc.driver}" />
+        <property name="url" value="${skip.h2.jdbc.url}" />
+        <property name="username" value="${skip.h2.jdbc.username}" />
+        <property name="password" value="${skip.h2.jdbc.password}" />
+    </bean>
+
+    <bean id="logDataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+        <property name="driverClassName" value="${log.h2.jdbc.driver}" />
+        <property name="url" value="${log.h2.jdbc.url}" />
+        <property name="username" value="${log.h2.jdbc.username}" />
+        <property name="password" value="${log.h2.jdbc.password}" />
+    </bean>
+
+    <!-- non-transaction -->
+    <bean id="transactionManager" class="org.springframework.batch.support.transaction.ResourcelessTransactionManager" />
+
+    <!-- 
+    <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager" />
+    -->
+    
+    <!-- create job-meta tables automatically 
+    <jdbc:initialize-database data-source="logDataSource">
+        <jdbc:script location="org/springframework/batch/core/schema-drop-h2.sql" />
+        <jdbc:script location="org/springframework/batch/core/schema-h2.sql" />
+    </jdbc:initialize-database>
+    -->
+</beans>
